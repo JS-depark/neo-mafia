@@ -141,7 +141,8 @@
       <div class="small">
         형식: 모드-시드-인원-마피아수<br />
         모드 1: 시민 전원이 같은 과일<br />
-        모드 2: 시민이 두 팀으로 나뉘어 다른 과일
+        모드 2: 시민이 두 팀으로 나뉘어 다른 과일<br />
+        같은 방 코드라도 한국 날짜가 바뀌면 새 조합이 생성됨
       </div>
     </div>
 
@@ -151,7 +152,7 @@
       • <b>글자 수 언급 금지</b><br />
       • 예: “두 글자야”, “받침 있어” 같은 힌트 금지<br />
       • 정원이 꽉 차면 <b>“다음 기회에”</b>가 표시됨<br />
-      • 지금 버전은 테스트용이라, 로직 숨기기는 나중에 개선 예정
+      • 한국 시간 자정이 지나면 같은 코드도 새 판으로 처리됨
     </div>
   </div>
 
@@ -175,8 +176,14 @@
     const db = getFirestore(app);
 
     const FRUITS = [
-      "사과", "배", "복숭아", "자두", "포도", "수박", "참외", "멜론",
-      "딸기", "체리", "블루베리", "망고", "파인애플", "오렌지", "귤", "키위"
+      "사과", "배", "복숭아", "자두", "포도", "수박", "참외", "멜론", "딸기", "체리",
+      "블루베리", "망고", "파인애플", "오렌지", "귤", "키위", "감", "석류", "바나나", "레몬",
+      "무화과", "살구", "자몽", "라임", "유자", "모과", "앵두", "매실", "산딸기",
+      "라즈베리", "블랙베리", "크랜베리", "아보카도", "코코넛", "두리안", "리치", "패션프루트", "용과",
+      "스타프루트", "구아바", "파파야", "망고스틴", "아사이베리", "오디",
+      "대추", "플럼코트", "천도복숭아", "황도", "백도", "거봉", "청포도", "적포도", "샤인머스캣",
+      "머루", "캠벨포도", "코코넛", "한라봉", "천혜향", "레드향", "금귤",
+      "청사과", "홍옥", "아오리사과", "부사", "돌배", "서양배", "아로니아", "복분자", "구기자", "산수유열매"
     ];
 
     const roomCodeInput = document.getElementById("room-code");
@@ -245,6 +252,26 @@
       return { mode, seed, capacity, mafiaCount };
     }
 
+    function getKstDateKey() {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      });
+
+      const parts = formatter.formatToParts(new Date());
+      const year = parts.find(part => part.type === "year").value;
+      const month = parts.find(part => part.type === "month").value;
+      const day = parts.find(part => part.type === "day").value;
+
+      return `${year}${month}${day}`;
+    }
+
+    function buildRoomId(dateKey, roomCode) {
+      return `${dateKey}__${roomCode}`;
+    }
+
     function xmur3(str) {
       let h = 1779033703 ^ str.length;
       for (let i = 0; i < str.length; i++) {
@@ -281,11 +308,13 @@
       return copied;
     }
 
-    function buildRoles(roomCode) {
+    function buildRoles(roomCode, dateKey) {
       const { mode, capacity, mafiaCount } = parseRoomCode(roomCode);
       const citizenCount = capacity - mafiaCount;
 
-      const fruitPool = shuffleWithRng(FRUITS, rngFromString("fruit|" + roomCode));
+      const dailySeedBase = `${dateKey}|${roomCode}`;
+
+      const fruitPool = shuffleWithRng(FRUITS, rngFromString("fruit|" + dailySeedBase));
       const fruitA = fruitPool[0];
       const fruitB = mode === 2 ? fruitPool[1] : fruitPool[0];
 
@@ -298,7 +327,7 @@
         ...Array(mafiaCount).fill("마피아 (힌트: 과일)")
       ];
 
-      return shuffleWithRng(roles, rngFromString("role|" + roomCode));
+      return shuffleWithRng(roles, rngFromString("role|" + dailySeedBase));
     }
 
     async function joinRoom() {
@@ -309,16 +338,19 @@
           throw new Error("방 코드를 입력해줘.");
         }
 
+        const settings = parseRoomCode(roomCode);
+        const dateKey = getKstDateKey();
+        const roomId = buildRoomId(dateKey, roomCode);
+        const roles = buildRoles(roomCode, dateKey);
+
         localStorage.setItem(LAST_ROOM_KEY, roomCode);
         setLoading(true);
 
-        const settings = parseRoomCode(roomCode);
-        const roles = buildRoles(roomCode);
         const user = await ensureAuth();
         const uid = user.uid;
 
-        const roomRef = doc(db, "rooms", roomCode);
-        const playerRef = doc(db, "rooms", roomCode, "players", uid);
+        const roomRef = doc(db, "rooms", roomId);
+        const playerRef = doc(db, "rooms", roomId, "players", uid);
 
         const result = await runTransaction(db, async (tx) => {
           const mySnap = await tx.get(playerRef);
@@ -336,7 +368,8 @@
             const role = roles[0];
 
             tx.set(roomRef, {
-              code: roomCode,
+              roomCode: roomCode,
+              dateKey: dateKey,
               mode: settings.mode,
               seed: settings.seed,
               capacity: settings.capacity,
@@ -359,6 +392,18 @@
           }
 
           const roomData = roomSnap.data();
+
+          if (
+            roomData.roomCode !== roomCode ||
+            roomData.dateKey !== dateKey ||
+            roomData.mode !== settings.mode ||
+            roomData.seed !== settings.seed ||
+            roomData.capacity !== settings.capacity ||
+            roomData.mafiaCount !== settings.mafiaCount
+          ) {
+            throw new Error("방 설정이 일치하지 않아.");
+          }
+
           const count = roomData.playerCount || 0;
 
           if (count >= roomData.capacity) {
