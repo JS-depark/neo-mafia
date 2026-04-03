@@ -121,6 +121,8 @@
       font-size: 0.82rem;
       color: #95a5a6;
       margin-top: 8px;
+      line-height: 1.6;
+      text-align: left;
     }
   </style>
 </head>
@@ -136,7 +138,11 @@
     <div class="input-wrap">
       <input id="room-code" type="text" placeholder="예: 1-3482-8-2" autocomplete="off" />
       <button id="main-btn">방 입장하고 역할 받기</button>
-      <div class="small">형식: 모드-시드-인원-마피아수</div>
+      <div class="small">
+        형식: 모드-시드-인원-마피아수<br />
+        모드 1: 시민 전원이 같은 과일<br />
+        모드 2: 시민이 두 팀으로 나뉘어 다른 과일
+      </div>
     </div>
 
     <div id="result">역할 확인 전</div>
