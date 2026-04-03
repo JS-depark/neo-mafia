@@ -66,7 +66,7 @@
     #result {
       font-size: 2rem;
       font-weight: 800;
-      margin: 24px 0;
+      margin: 24px 0 14px 0;
       color: #34495e;
       min-height: 3.5rem;
       display: flex;
@@ -78,6 +78,36 @@
       box-sizing: border-box;
       word-break: keep-all;
       text-align: center;
+    }
+
+    #proof-box {
+      display: none;
+      margin-bottom: 18px;
+      padding: 14px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid #e5eaf0;
+      text-align: left;
+    }
+
+    #proof-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 8px;
+    }
+
+    .proof-row {
+      font-size: 0.92rem;
+      color: #5d6d7e;
+      line-height: 1.7;
+      word-break: break-all;
+    }
+
+    .proof-label {
+      font-weight: 700;
+      color: #34495e;
+      margin-right: 6px;
     }
 
     button {
@@ -135,7 +165,7 @@
       역할을 확인하세요.
     </p>
 
-    <div class="input-wrap">
+    <div class="input-wrap" id="input-wrap">
       <input id="room-code" type="text" placeholder="예: 1-3482-8-2" autocomplete="off" />
       <button id="main-btn">방 입장하고 역할 받기</button>
       <div class="small">
@@ -147,6 +177,18 @@
     </div>
 
     <div id="result">역할 확인 전</div>
+
+    <div id="proof-box">
+      <div id="proof-title">참여 정보</div>
+      <div class="proof-row">
+        <span class="proof-label">오늘 날짜</span>
+        <span id="proof-date"></span>
+      </div>
+      <div class="proof-row">
+        <span class="proof-label">방 코드</span>
+        <span id="proof-room-code"></span>
+      </div>
+    </div>
 
     <div class="notice">
       • <b>글자 수 언급 금지</b><br />
@@ -189,6 +231,11 @@
     const roomCodeInput = document.getElementById("room-code");
     const mainBtn = document.getElementById("main-btn");
     const resultDiv = document.getElementById("result");
+    const inputWrap = document.getElementById("input-wrap");
+
+    const proofBox = document.getElementById("proof-box");
+    const proofDate = document.getElementById("proof-date");
+    const proofRoomCode = document.getElementById("proof-room-code");
 
     const LAST_ROOM_KEY = "fruit_mafia_last_room";
 
@@ -266,6 +313,13 @@
       const day = parts.find(part => part.type === "day").value;
 
       return `${year}${month}${day}`;
+    }
+
+    function formatKstDisplayDate(dateKey) {
+      const year = dateKey.slice(0, 4);
+      const month = dateKey.slice(4, 6);
+      const day = dateKey.slice(6, 8);
+      return `${year}.${month}.${day} (KST)`;
     }
 
     function buildRoomId(dateKey, roomCode) {
@@ -358,7 +412,9 @@
           if (mySnap.exists()) {
             return {
               status: "joined",
-              role: mySnap.data().role
+              role: mySnap.data().role,
+              roomCode,
+              dateKey
             };
           }
 
@@ -387,7 +443,9 @@
 
             return {
               status: "joined",
-              role: role
+              role: role,
+              roomCode,
+              dateKey
             };
           }
 
@@ -425,14 +483,16 @@
 
           return {
             status: "joined",
-            role: role
+            role: role,
+            roomCode,
+            dateKey
           };
         });
 
         if (result.status === "full") {
           displayFull();
         } else {
-          displayRole(result.role);
+          displayRole(result.role, result.roomCode, result.dateKey);
         }
 
       } catch (error) {
@@ -459,10 +519,13 @@
       mainBtn.textContent = isLoading ? "입장 중..." : "방 입장하고 역할 받기";
     }
 
-    function displayRole(role) {
+    function displayRole(role, roomCode, dateKey) {
       resultDiv.innerText = role;
-      mainBtn.style.display = "none";
-      roomCodeInput.style.display = "none";
+      inputWrap.style.display = "none";
+
+      proofDate.innerText = formatKstDisplayDate(dateKey);
+      proofRoomCode.innerText = roomCode;
+      proofBox.style.display = "block";
 
       if (role.includes("마피아")) {
         resultDiv.style.color = "#e74c3c";
@@ -477,12 +540,14 @@
       resultDiv.innerText = "다음 기회에";
       resultDiv.style.color = "#7f8c8d";
       resultDiv.style.borderColor = "#dddddd";
+      proofBox.style.display = "none";
     }
 
     function showError(message) {
       resultDiv.innerText = message;
       resultDiv.style.color = "#e67e22";
       resultDiv.style.borderColor = "#f5cba7";
+      proofBox.style.display = "none";
     }
   </script>
 </body>
